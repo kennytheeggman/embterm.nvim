@@ -69,11 +69,11 @@ function M.selection(parent, selection)
 
 	-- Calculate the top line number in the selection
 	-- Clamp to 0 if below the first line, otherwise clamp to the height minus one
-	local top = math.min(height, math.max(0, cursor.start))
+	local top = math.min(height-1, math.max(0, cursor.start))
 
 	-- Calculate the bottom line number in the selection
 	-- Clamp to 1 if above the last line, otherwise clamp to the height
-	local bottom = math.min(height, math.max(0, cursor.last))
+	local bottom = math.min(height-1, math.max(0, cursor.last))
 
 	return { top=top, bot=bottom }
 end

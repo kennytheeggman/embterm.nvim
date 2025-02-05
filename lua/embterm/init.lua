@@ -23,6 +23,10 @@ function M.quick_setup()
 	})
 end
 
+function M.config(prop, val)
+	config[prop] = val
+end
+
 function M.setup(conf)
 	config = conf
 	term.setup(config)
