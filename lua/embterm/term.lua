@@ -54,13 +54,13 @@ end
 -- Set the current window to be focused and its cursor position
 function M.defocus()
 	-- Get the buffer number of the current window
-	local bufnr = vim.fn.bufnr("%")
+	local bufwin = vim.fn.bufwinid(bufnr)
 
 	-- Get the parent buffer number (i.e., the previous/next window)
 	local pwin = vim.fn.bufwinid(parent.bufnr)
 
 	-- If there is no current window, exit function
-	if bufnr == -1 then
+	if bufwin == -1 then
 		return
 	end
 
