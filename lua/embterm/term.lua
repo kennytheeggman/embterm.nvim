@@ -99,59 +99,111 @@ local function _enable()
 	end
 end
 
---/// document the following function with docstring and comments
+-- Enables the module's functionality.
+-- @note This function is a convenience wrapper for _enable().
 function M.enable()
+	-- Call the private enable function to set up the module.
 	_enable()
+
+	-- Set the enabled flag to true to indicate that the module is active.
 	M.enabled = true
 end
---/// document the following function with docstring and comments
+
+-- Disables all windows containing the current buffer.
+-- 
+-- This function closes all windows that contain the current buffer,
+-- effectively hiding it from view. It is typically used when a
+-- user wants to temporarily hide a buffer without deleting it.
 local function _disable()
+	-- Find all windows that contain the current buffer
 	local wins = vim.fn.win_findbuf(bufnr)
+
+	-- Close each window, making it invisible
 	for _, win in ipairs(wins) do
 		vim.api.nvim_win_close(win, true)
 	end
 end
---/// document the following function with docstring and comments
+
+-- Disables the plugin by deleting the current buffer and resetting internal state.
+-- @details Deletes the current buffer and resets the plugin's internal state.
 function M.disable()
+	-- Call the parent class's disable method to ensure proper cleanup.
 	_disable()
+
+	-- Check if a valid buffer exists before attempting to delete it.
 	if vim.api.nvim_buf_is_valid(bufnr) then
+		-- Delete the current buffer with force, ensuring it is properly cleaned up.
 		vim.api.nvim_buf_delete(bufnr, { force = true })
 	end
+
+	-- Indicate that the terminal was not opened during this session.
 	term_unopened = true
+
+	-- Reset the selection to nil, indicating no active selection.
 	selection = nil
+
+	-- Set the plugin's enabled state to false, effectively disabling it.
 	M.enabled = false
 end
 
---/// document the following function with docstring and comments
+-- Sets focus to the parent window of the current buffer.
+-- If no parent window exists, it does nothing.
 local function set_focus()
+	-- Get the ID of the parent window of the current buffer
 	local win = vim.fn.bufwinid(parent.bufnr)
+
+	-- If there is no parent window, exit early
 	if win == -1 then
 		return
 	end
+
+	-- Set focus to the parent window
 	vim.api.nvim_set_current_win(win)
 end
 
---/// document the following function with docstring and comments
+-- Create a new window with the specified configuration.
+-- @param config A table containing the following keys:
+--   - cmd: The command to open in the terminal.
+--   - priv: The private key for the terminal.
 function M.setup(config)
+	-- Get the command and private key from the config table
 	cmd = config.cmd
 	mark = config.priv
 	bufnr = vim.api.nvim_create_buf(false, true)
+
+	-- Create a new buffer
+	local bufnr = vim.api.nvim_create_buf(false, true)
+
+	-- Get the current window information
 	local pwinnr = vim.fn.winnr()
 	parent = vim.fn.getwininfo()[pwinnr]
-	-- vim.api.nvim_open_term(bufnr, {})
+
+	-- Enable the plugin
 	M.enable()
+
+	-- Check if a terminal is already open in the buffer
 	if not vim.fn.bufwinid(bufnr) == -1 then
+		-- Open a new terminal with the specified command and private key
 		vim.fn.termopen(cmd)
 		term_unopened = false
+	else
+		term_unopened = false
 	end
+
+	-- Schedule a function to set the current window to the parent window
 	vim.schedule(function()
 		vim.api.nvim_set_current_win(parent.winid)
 	end)
+
+	-- Create an autocmd group for the test window
 	local autoclose = vim.api.nvim_create_augroup("TestWindow", {})
+
+	-- Autocmds for when a buffer is entered or left
 	vim.api.nvim_create_autocmd({ "BufWinEnter" }, {
 		group = autoclose,
 		buffer = parent.bufnr,
 		callback = function()
+			-- Schedule a function to toggle the enabled state and set focus
 			vim.schedule(function()
 				if M.enabled then
 					_disable()
@@ -161,10 +213,12 @@ function M.setup(config)
 			end)
 		end,
 	})
+
 	vim.api.nvim_create_autocmd({ "WinScrolled", "BufWinLeave" }, {
 		group = autoclose,
 		buffer = parent.bufnr,
 		callback = function()
+			-- Schedule a function to toggle the enabled state and set focus
 			vim.schedule(function()
 				if M.enabled then
 					_disable()
@@ -174,19 +228,25 @@ function M.setup(config)
 			end)
 		end,
 	})
+
+	-- Autocmds for when the terminal is closed or the buffer is deleted
 	vim.api.nvim_create_autocmd({ "TermClose", "QuitPre", "BufDelete" }, {
 		group = autoclose,
 		buffer = bufnr,
 		callback = function()
+			-- Schedule a function to disable the plugin
 			vim.schedule(function()
 				M.disable()
 			end)
 		end,
 	})
+
+	-- Autocmd for when a buffer is entered
 	vim.api.nvim_create_autocmd({ "BufEnter" }, {
 		group = autoclose,
 		buffer = bufnr,
 		callback = function()
+			-- Schedule a function to set focus if the current window matches the parent window
 			vim.schedule(function()
 				local cur = vim.fn.winnr()
 				local winid = vim.fn.win_getid(cur)
@@ -199,30 +259,50 @@ function M.setup(config)
 	})
 end
 
---/// document the following function with docstring and comments
+-- Creates a new Vim window with the specified buffer number.
+-- @param bufnr number The buffer number to create the window for.
 function M.create_vim_window(bufnr)
-	-- Create a new Vim window
+	-- Get the visual selection from the cursor.
 	selection = cursor.visual(parent, mark)
+
+	-- Check if there is a valid selection.
 	local res = cursor.selection(parent, selection)
+	if not res then
+		return
+	end
+
+	-- Get the buffer window ID.
 	local pwinid = vim.fn.bufwinid(parent.bufnr)
 	if pwinid == -1 then
+		-- If no buffer window is found, make the new buffer invisible.
 		buf_invis = true
 		return
 	else
+		-- Set the flag to indicate that the buffer is not invisible.
 		buf_invis = false
 	end
+
 	if res == nil then
 		return
 	end
+	-- Get the top and bottom positions of the selection.
 	local top = res.top
 	local bottom = res.bot
+
+	-- Check if the selection spans an entire line.
 	if top == bottom then
+		-- If it does, make the buffer invisible.
 		buf_invis = true
 		return
 	else
+		-- Set the flag to indicate that the buffer is not invisible.
 		buf_invis = false
 	end
+
+	-- Get the size of the buffer window.
 	local size = get_buf_size(pwinid)
+
+	-- Open a new Vim window with the specified settings.
 	local win = vim.api.nvim_open_win(bufnr, true, {
 		relative = 'win',
 		win = pwinid,
@@ -234,14 +314,12 @@ function M.create_vim_window(bufnr)
 		focusable = false,
 		zindex = 45
 	})
+
+	-- Open a new terminal if one is not already open.
 	if term_unopened then
 		vim.fn.termopen(cmd)
 		term_unopened = false
 	end
 end
 
-
-
-
 return M
-
