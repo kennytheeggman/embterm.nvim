@@ -171,9 +171,6 @@ function M.setup(config)
 	mark = config.priv
 	bufnr = vim.api.nvim_create_buf(false, true)
 
-	-- Create a new buffer
-	local bufnr = vim.api.nvim_create_buf(false, true)
-
 	-- Get the current window information
 	local pwinnr = vim.fn.winnr()
 	parent = vim.fn.getwininfo()[pwinnr]
@@ -185,8 +182,6 @@ function M.setup(config)
 	if not vim.fn.bufwinid(bufnr) == -1 then
 		-- Open a new terminal with the specified command and private key
 		vim.fn.termopen(cmd)
-		term_unopened = false
-	else
 		term_unopened = false
 	end
 
