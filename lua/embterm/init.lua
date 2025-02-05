@@ -55,10 +55,9 @@ function M.setup(conf)
 	vim.api.nvim_create_user_command("EmbTermFocus", M.focus, {})
 	vim.api.nvim_create_user_command("EmbTermDefocus", M.defocus, {})
 	vim.api.nvim_create_user_command("EmbTermClose", M.close, {})
-	local keybinds = conf.keybinds
 
 	-- Bind keybindings to the terminal operations.
-	local keybinds = config.keybinds
+	local keybinds = conf.keybinds
 	for _, v in ipairs(keybinds) do
 		-- Use noremap to prevent remapping of existing keys.
 		vim.api.nvim_set_keymap(v[1], v[2], v[3], { noremap = true })
