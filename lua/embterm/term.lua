@@ -11,6 +11,7 @@ local prefoc
 
 local cmd
 local mark
+local ext
 
 M.enabled = true
 
@@ -136,6 +137,11 @@ function M.disable()
 		vim.api.nvim_buf_delete(bufnr, { force = true })
 	end
 
+	local ns = vim.api.nvim_create_namespace("embterm")
+	vim.schedule(function()
+		vim.api.nvim_buf_del_extmark(parent.bufnr, ns, ext)
+	end)
+
 	-- Indicate that the terminal was not opened during this session.
 	term_unopened = true
 
@@ -170,6 +176,7 @@ function M.setup(config)
 	cmd = config.cmd
 	mark = config.priv
 	bufnr = vim.api.nvim_create_buf(false, true)
+	local ns = vim.api.nvim_create_namespace("embterm")
 
 	-- Get the current window information
 	local pwinnr = vim.fn.winnr()
@@ -177,6 +184,15 @@ function M.setup(config)
 
 	-- Enable the plugin
 	M.enable()
+	vim.schedule(function()
+		local last = vim.api.nvim_buf_get_mark(parent.bufnr, mark.last)[1]
+		ext = vim.api.nvim_buf_set_extmark(parent.bufnr, ns, last-1, 0, {
+			virt_text_win_col = 0,
+			virt_text = {{""}},
+			virt_lines = {{{""}}, {{""}}, {{""}}, {{""}}, {{""}}}
+		})
+		print(ext)
+	end)
 
 	-- Check if a terminal is already open in the buffer
 	if not vim.fn.bufwinid(bufnr) == -1 then
@@ -259,9 +275,13 @@ end
 function M.create_vim_window(bufnr)
 	-- Get the visual selection from the cursor.
 	selection = cursor.visual(parent, mark)
+	if selection == nil then
+		return
+	end
+	local newsl = { start=selection.start, last=selection.last+5 }
 
 	-- Check if there is a valid selection.
-	local res = cursor.selection(parent, selection)
+	local res = cursor.selection(parent, newsl)
 	if not res then
 		return
 	end
