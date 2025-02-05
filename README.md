@@ -1,6 +1,6 @@
 # Code Completer
 
-This project is a python script that takes code from your keyboard, and helps you complete it with AI.
+This project is a neovim plugin that embeds a terminal into your window
 
 # TODO
 
