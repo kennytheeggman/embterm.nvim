@@ -186,7 +186,10 @@ function M.setup(config)
 	M.enable()
 	vim.schedule(function()
 		local last = vim.api.nvim_buf_get_mark(parent.bufnr, mark.last)[1]
-		ext = vim.api.nvim_buf_set_extmark(parent.bufnr, ns, last-1, 0, {
+		if not last == 0 then
+			last = last-1
+		end
+		ext = vim.api.nvim_buf_set_extmark(parent.bufnr, ns, last, 0, {
 			virt_text_win_col = 0,
 			virt_text = {{""}},
 			virt_lines = {{{""}}, {{""}}, {{""}}, {{""}}, {{""}}}
