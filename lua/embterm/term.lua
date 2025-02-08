@@ -4,13 +4,14 @@ local cursor = require("lua.embterm.cursor")
 local G = {}
 
 function G.new(bunfr, line, lines)
+	local O = {}
 	local height = lines
 	local ns = vim.api.nvim_create_namespace("embterm")
 	local ext
 
-	function G.enable()
+	function O.enable()
 		local t = {}
-		for i = 0, height - 1 do
+		for i = 1, height do
 			t[i] = {{""}}
 		end
 		ext = vim.api.nvim_buf_set_extmark(bunfr, ns, line-1, 0, {
@@ -20,22 +21,22 @@ function G.new(bunfr, line, lines)
 		})
 		assert(ext ~= nil, "Setting extmark failed")
 	end
-	function G.disable()
+	function O.disable()
 		if ext == nil then
 			return
 		end
 		vim.api.nvim_buf_del_extmark(bunfr, ns, ext)
 	end
-	G.delete = G.disable
-	function G.set_lines(num_lines)
+	O.delete = O.disable
+	function O.set_lines(num_lines)
 		height = num_lines
-		G.disable()
-		G.enable()
+		O.disable()
+		O.enable()
 	end
-	function G.get_lines()
+	function O.get_lines()
 		return height
 	end
-	return G
+	return O
 end
 
 local D = {}
@@ -55,7 +56,10 @@ function D.new(parent, config)
 	O.visible = false
 	-- add virtual text
 	O.ghost = G.new(O.pbufn, O.selection.last, 1)
+	O.ghost.enable()
 
+	local cmd1
+	local cmd2
 	-- clean up the object
 	function O.delete()
 		-- close windows
@@ -64,18 +68,30 @@ function D.new(parent, config)
 			vim.api.nvim_win_close(win, true)
 		end
 		-- delete buffer
-		if vim.api.buf_is_valid(O.bufnr) then
+		if vim.api.nvim_buf_is_valid(O.bufnr) then
 			vim.api.nvim_buf_delete(O.bufnr, { force = true })
 		end
+		O.ghost.delete()
+		vim.api.nvim_del_autocmd(cmd1)
+		vim.api.nvim_del_autocmd(cmd2)
 	end
+	-- update callback
 	function O.update()
+		-- close windows
+		if O.visible then
+			local wins = vim.fn.win_findbuf(O.bufnr)
+			for _, win in ipairs(wins) do
+				vim.api.nvim_win_close(win, true)
+			end
+		end
+		-- get selection
 		local screen_selection = cursor.relative(O.pbufn, O.selection)
 		assert(screen_selection ~= nil, "Unreachable control flow")
 		local last = screen_selection.last + O.ghost.get_lines()
-		screen_selection.last = last
+		screen_selection.last = last + 1
 		local clamped_selection = cursor.clamp(O.pbufn, screen_selection)
 		assert(clamped_selection ~= nil, "Unreachable control flow")
-		-- get parent buffer window ID
+		-- update visibility status
 		local winid = vim.fn.bufwinid(O.pbufn)
 		if winid == -1 then
 			O.visible = false
@@ -86,12 +102,13 @@ function D.new(parent, config)
 			return
 		end
 		O.visible = true
+		-- create window
 		local width = vim.api.nvim_win_get_width(winid)
 		vim.api.nvim_open_win(O.bufnr, true, {
 			relative = 'win',
 			win = winid,
 			width = width,
-			height = clamped_selection.last - clamped_selection.start + 1,
+			height = clamped_selection.last - clamped_selection.start,
 			col = 0,
 			row = clamped_selection.start,
 			style = 'minimal',
@@ -100,6 +117,17 @@ function D.new(parent, config)
 		})
 	end
 
+	local auto = vim.api.nvim_create_augroup("embterm", {})
+	cmd1 = vim.api.nvim_create_autocmd({ "BufWinEnter", "WinScrolled", "BufWinLeave" }, {
+		group = auto,
+		buffer = O.pbufn,
+		callback = O.update
+	})
+	cmd2 = vim.api.nvim_create_autocmd({ "TermClose", "QuitPre", "BufDelete" }, {
+		group = auto,
+		buffer = O.bufnr,
+		callback = O.delete
+	})
 	return O
 end
 
