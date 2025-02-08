@@ -1,7 +1,113 @@
+
+local cursor = require("lua.embterm.cursor")
+
+local G = {}
+
+function G.new(bunfr, line, lines)
+	local height = lines
+	local ns = vim.api.nvim_create_namespace("embterm")
+	local ext
+
+	function G.enable()
+		local t = {}
+		for i = 0, height - 1 do
+			t[i] = {{""}}
+		end
+		ext = vim.api.nvim_buf_set_extmark(bunfr, ns, line-1, 0, {
+			virt_text_win_col = 0,
+			virt_text = {{""}},
+			virt_lines = t
+		})
+		assert(ext ~= nil, "Setting extmark failed")
+	end
+	function G.disable()
+		if ext == nil then
+			return
+		end
+		vim.api.nvim_buf_del_extmark(bunfr, ns, ext)
+	end
+	G.delete = G.disable
+	function G.set_lines(num_lines)
+		height = num_lines
+		G.disable()
+		G.enable()
+	end
+	function G.get_lines()
+		return height
+	end
+	return G
+end
+
+local D = {}
+
+function D.new(parent, config)
+	local O = {}
+	O.pbufn = parent
+	O.cmd = config.cmd
+	-- init selection
+	O.selection = cursor.visual(O.pbufn, config.priv)
+	if O.selection == nil then
+		O.selection = cursor.normal(O.pbufn)
+	end
+	assert(O.selection ~= nil, "Embterm: Selection not found")
+	-- create buffer
+	O.bufnr = vim.api.nvim_create_buf(false, true)
+	O.visible = false
+	-- add virtual text
+	O.ghost = G.new(O.pbufn, O.selection.last, 1)
+
+	-- clean up the object
+	function O.delete()
+		-- close windows
+		local wins = vim.fn.win_findbuf(O.bufnr)
+		for _, win in ipairs(wins) do
+			vim.api.nvim_win_close(win, true)
+		end
+		-- delete buffer
+		if vim.api.buf_is_valid(O.bufnr) then
+			vim.api.nvim_buf_delete(O.bufnr, { force = true })
+		end
+	end
+	function O.update()
+		local screen_selection = cursor.relative(O.pbufn, O.selection)
+		assert(screen_selection ~= nil, "Unreachable control flow")
+		local last = screen_selection.last + O.ghost.get_lines()
+		screen_selection.last = last
+		local clamped_selection = cursor.clamp(O.pbufn, screen_selection)
+		assert(clamped_selection ~= nil, "Unreachable control flow")
+		-- get parent buffer window ID
+		local winid = vim.fn.bufwinid(O.pbufn)
+		if winid == -1 then
+			O.visible = false
+			return
+		end
+		if clamped_selection.start == clamped_selection.last then
+			O.visible = false
+			return
+		end
+		O.visible = true
+		local width = vim.api.nvim_win_get_width(winid)
+		vim.api.nvim_open_win(O.bufnr, true, {
+			relative = 'win',
+			win = winid,
+			width = width,
+			height = clamped_selection.last - clamped_selection.start + 1,
+			col = 0,
+			row = clamped_selection.start,
+			style = 'minimal',
+			focusable = false,
+			zindex = 45
+		})
+	end
+
+	return O
+end
+
+
+
 local M = {}
 
 
-local cursor = require("embterm.cursor")
 local bufnr
 local parent
 local buf_invis
@@ -340,4 +446,4 @@ function M.create_vim_window(bufnr)
 	end
 end
 
-return M
+return D
