@@ -30,6 +30,31 @@ local function rowtoscreen(winid, row, front)
 	local top = totop - view.topfill
 	return torow - top
 end
+function M.screentorow(bufnr, row)
+	local lines = vim.api.nvim_buf_line_count(bufnr)
+	local winid = vim.fn.bufwinid(bufnr)
+	if winid == -1 then
+		return nil
+	end
+	local view = vim.api.nvim_win_call(winid, vim.fn.winsaveview)
+	local topfill = 0
+	local current = lines - 1
+	for i = 0, lines-1 do
+		current = i + 1
+		local torow = vim.api.nvim_win_text_height(winid, {
+			start_row = 0,
+			end_row = i
+		}).all
+		if torow >= row then
+			topfill = torow - row
+			break
+		end
+	end
+	view.topfill = topfill 
+	view.topline = current 
+	view.lnum = current 
+	return view
+end
 
 function M.relative(bufnr, selection, offsets)
 	local winid = vim.fn.bufwinid(bufnr)

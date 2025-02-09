@@ -104,10 +104,6 @@ function D.new(parent, config)
 		local screen_selection = cursor.relative(O.pbufn, O.selection)
 		assert(screen_selection ~= nil, "Embterm: Unreachable control flow")
 
-		local start = screen_selection.start
-		local last = screen_selection.last
-		screen_selection.last = last
-		screen_selection.start = start
 		local other = screen_selection.last
 		local clamped_selection = cursor.clamp(O.pbufn, screen_selection)
 		local clamped_other = cursor.clamp(O.pbufn, { start = other, last = other})
@@ -156,6 +152,15 @@ function D.new(parent, config)
 		vim.api.nvim_win_call(win1, function() vim.cmd("diffthis") end)
 		vim.api.nvim_win_call(win1, function() vim.opt.signcolumn = 'no' end)
 		vim.api.nvim_win_call(win2, function() vim.cmd("diffthis") end)
+		if screen_selection.start < 0 then
+			local offset = -screen_selection.start + 1
+			print(offset)
+			-- local view1 = cursor.screentorow(O.bufnrs[1], offset)
+			-- vim.api.nvim_win_call(win1, function() vim.fn.winrestview(view1) end)
+			local view2 = cursor.screentorow(O.bufnrs[2], offset)
+			print(view2.topline, view2.topfill)
+			vim.api.nvim_win_call(win2, function() vim.fn.winrestview(view2) end)
+		end
 	end
 
 	function O.focus()
@@ -171,6 +176,9 @@ function D.new(parent, config)
 		winid = vim.fn.bufwinid(O.bufnrs[1])
 		assert(winid ~= -1, "Embterm: Unreachable control flow")
 		vim.api.nvim_set_current_win(winid)
+		local view = vim.fn.winsaveview()
+		view.topline = 1
+		vim.fn.winrestview(view)
 	end
 
 	function O.defocus()
@@ -214,10 +222,10 @@ function D.new(parent, config)
 				return
 			end
 			if pos.start <= O.selection.last and pos.start >= O.selection.start then
-				O.focus()
-				vim.api.nvim_win_call(pwini, function()
+				vim.schedule(function() vim.api.nvim_win_call(pwini, function()
 					vim.cmd("norm! zz")
-				end)
+				end) end)
+				O.focus()
 			end
 		end
 	})
@@ -228,12 +236,22 @@ function D.new(parent, config)
 			if pwini == -1 then
 				return
 			end
-			vim.api.nvim_win_call(pwini, function()
+			vim.schedule(function() vim.api.nvim_win_call(pwini, function()
 				vim.cmd("norm! zz")
-			end)
+			end) end)
 		end
 	})
-	local function keymap(key, bloc, destination)
+	cmds[7] = vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
+		buffer = O.bufnrs[1],
+		callback = function()
+			local lines = vim.api.nvim_buf_line_count(O.bufnrs[1])
+			local lines2 = vim.api.nvim_buf_line_count(O.bufnrs[2])
+			O.ghost.set_lines(math.max(0, lines - lines2) + 1)
+			O.update()
+			O.focus()
+		end
+	})
+	local function keymap(key, other, bloc, destination)
 		vim.api.nvim_buf_set_keymap(O.bufnrs[1], 'n', key, "", {
 			callback = function()
 				local pos = cursor.normal(O.bufnrs[1])
@@ -250,17 +268,20 @@ function D.new(parent, config)
 					vim.api.nvim_win_call(pwini, function()
 						vim.cmd("norm! zz")
 					end)
+				else
+					vim.cmd("norm! " .. other)
 				end
-			end
+			end,
+			noremap = true
 		})
 	end
 	local num_lines = function() return vim.api.nvim_buf_line_count(O.bufnrs[1]) end
-	keymap("j", function() return 1 end, function() return {O.selection.start - 1, prefocus[2]} end)
-	keymap("<Up>", function() return 1 end, function() return {O.selection.start - 1, prefocus[2]} end)
-	keymap("<C-j>", function() return 1 end, function() return {math.max(1, O.selection.start - 10), prefocus[2]} end)
-	keymap("k", num_lines, function() return {O.selection.last + 1, prefocus[2]} end)
-	keymap("<Down>", num_lines, function() return {O.selection.last + 1, prefocus[2]} end)
-	keymap("<C-k>", num_lines, function() return {math.min(vim.api.nvim_buf_line_count(O.pbufn), O.selection.last + 10), prefocus[2]} end)
+	keymap("j", "k", function() return 1 end, function() return {O.selection.start - 1, prefocus[2]} end)
+	keymap("<Up>", "k", function() return 1 end, function() return {O.selection.start - 1, prefocus[2]} end)
+	keymap("<C-j>", "kkkkkkkkkk", function() return 1 end, function() return {math.max(1, O.selection.start - 10), prefocus[2]} end)
+	keymap("k", "j", num_lines, function() return {O.selection.last + 1, prefocus[2]} end)
+	keymap("<Down>", "j", num_lines, function() return {O.selection.last + 1, prefocus[2]} end)
+	keymap("<C-k>", "jjjjjjjjjj", num_lines, function() return {math.min(vim.api.nvim_buf_line_count(O.pbufn), O.selection.last + 10), prefocus[2]} end)
 	return O
 end
 
