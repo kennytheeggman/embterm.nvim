@@ -1,12 +1,19 @@
 M = {}
 
-local function rowtoscreen(winid, row)
+local function rowtoscreen(winid, row, front)
 	-- row 1 to row row
-	local offset = 0
 	local torow = vim.api.nvim_win_text_height(winid, {
 		start_row = 1,
 		end_row = row
 	}).all
+	if front then
+		local inclusive_row = vim.api.nvim_win_text_height(winid, {
+			start_row = row,
+			end_row = row,
+		}).fill
+		local temp = torow - inclusive_row
+		torow = temp
+	end
 	-- row 1 to screen top
 	local view = vim.api.nvim_win_call(winid, vim.fn.winsaveview)
 	if view.topfill == 0 then
@@ -21,16 +28,16 @@ local function rowtoscreen(winid, row)
 		end_row = view.topline
 	}).all
 	local top = totop - view.topfill
-	return torow - top + offset
+	return torow - top
 end
 
-function M.relative(bufnr, selection, post_selection_offset)
+function M.relative(bufnr, selection)
 	local winid = vim.fn.bufwinid(bufnr)
 	if winid == -1 then
 		return nil
 	end
-	local start = rowtoscreen(winid, selection.start)
-	local last = rowtoscreen(winid, selection.last)
+	local start = rowtoscreen(winid, selection.start, true)
+	local last = rowtoscreen(winid, selection.last, false)
 	return { start = start, last = last }
 end
 
