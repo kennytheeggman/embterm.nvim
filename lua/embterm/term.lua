@@ -88,7 +88,7 @@ function D.new(parent, config)
 		local screen_selection = cursor.relative(O.pbufn, O.selection, O.ghost.get_lines())
 		assert(screen_selection ~= nil, "Embterm: Unreachable control flow")
 		-- TODO: Fix getting total number of offset lines from a buffer in global function
-		local last = screen_selection.last + O.ghost.get_lines()
+		local last = screen_selection.last
 		screen_selection.last = last + 1
 		local clamped_selection = cursor.clamp(O.pbufn, screen_selection)
 		assert(clamped_selection ~= nil, "Embterm: Unreachable control flow")

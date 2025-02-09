@@ -1,35 +1,37 @@
 M = {}
 
+local function rowtoscreen(winid, row)
+	-- row 1 to row row
+	local offset = 0
+	local torow = vim.api.nvim_win_text_height(winid, {
+		start_row = 1,
+		end_row = row
+	}).all
+	-- row 1 to screen top
+	local view = vim.api.nvim_win_call(winid, vim.fn.winsaveview)
+	if view.topfill == 0 then
+		local inclusive_topfill = vim.api.nvim_win_text_height(winid, {
+			start_row = view.topline,
+			end_row = view.topline,
+		}).fill
+		view.topfill = inclusive_topfill
+	end
+	local totop = vim.api.nvim_win_text_height(winid, {
+		start_row = 1,
+		end_row = view.topline
+	}).all
+	local top = totop - view.topfill
+	return torow - top + offset
+end
+
 function M.relative(bufnr, selection, post_selection_offset)
 	local winid = vim.fn.bufwinid(bufnr)
 	if winid == -1 then
 		return nil
 	end
-	-- Get the window information and convert the winid to a window number
-	local view = vim.api.nvim_win_call(winid, vim.fn.winsaveview)
-	local topfill = view.topfill
-	local topline = view.topline - 1
-	local fillend = topline
-	if topline <= selection.start then
-		fillend = selection.start
-	end
-	local realfill = vim.api.nvim_win_text_height(winid, { start_row = topline, end_row = fillend }).fill	
-	local post_offset = 0
-	if topline > selection.last and topfill == 0 then
-		post_offset = post_selection_offset
-	else
-	end
-	local sfill = vim.api.nvim_win_text_height(winid, { start_row = topline, end_row = topline } ).fill
-	local offset = topfill - realfill
-	if topline < selection.start then
-		if sfill ~= 0 then
-			offset = topfill - realfill + post_selection_offset
-		else
-			offset = realfill - topfill
-		end
-	end
-	local scroll = view.topline - offset + post_offset
-	return { start = selection.start - scroll, last = selection.last - scroll }
+	local start = rowtoscreen(winid, selection.start)
+	local last = rowtoscreen(winid, selection.last)
+	return { start = start, last = last }
 end
 
 function M.clamp(bufnr, selection)
