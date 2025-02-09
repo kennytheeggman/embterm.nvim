@@ -19,7 +19,7 @@ function G.new(bunfr, line, lines)
 			virt_text = {{""}},
 			virt_lines = t
 		})
-		assert(ext ~= nil, "Setting extmark failed")
+		assert(ext ~= nil, "Embterm: Setting extmark failed")
 	end
 	function O.disable()
 		if ext == nil then
@@ -55,7 +55,7 @@ function D.new(parent, config)
 	O.bufnr = vim.api.nvim_create_buf(false, true)
 	O.visible = false
 	-- add virtual text
-	O.ghost = G.new(O.pbufn, O.selection.last, 1)
+	O.ghost = G.new(O.pbufn, O.selection.last, 5)
 	O.ghost.enable()
 
 	local cmd1
@@ -85,12 +85,13 @@ function D.new(parent, config)
 			end
 		end
 		-- get selection
-		local screen_selection = cursor.relative(O.pbufn, O.selection)
-		assert(screen_selection ~= nil, "Unreachable control flow")
+		local screen_selection = cursor.relative(O.pbufn, O.selection, O.ghost.get_lines())
+		assert(screen_selection ~= nil, "Embterm: Unreachable control flow")
+		-- TODO: Fix getting total number of offset lines from a buffer in global function
 		local last = screen_selection.last + O.ghost.get_lines()
 		screen_selection.last = last + 1
 		local clamped_selection = cursor.clamp(O.pbufn, screen_selection)
-		assert(clamped_selection ~= nil, "Unreachable control flow")
+		assert(clamped_selection ~= nil, "Embterm: Unreachable control flow")
 		-- update visibility status
 		local winid = vim.fn.bufwinid(O.pbufn)
 		if winid == -1 then
@@ -104,7 +105,7 @@ function D.new(parent, config)
 		O.visible = true
 		-- create window
 		local width = vim.api.nvim_win_get_width(winid)
-		vim.api.nvim_open_win(O.bufnr, true, {
+		vim.api.nvim_open_win(O.bufnr, false, {
 			relative = 'win',
 			win = winid,
 			width = width,
@@ -117,14 +118,11 @@ function D.new(parent, config)
 		})
 	end
 
-	local auto = vim.api.nvim_create_augroup("embterm", {})
 	cmd1 = vim.api.nvim_create_autocmd({ "BufWinEnter", "WinScrolled", "BufWinLeave" }, {
-		group = auto,
 		buffer = O.pbufn,
 		callback = O.update
 	})
 	cmd2 = vim.api.nvim_create_autocmd({ "TermClose", "QuitPre", "BufDelete" }, {
-		group = auto,
 		buffer = O.bufnr,
 		callback = O.delete
 	})

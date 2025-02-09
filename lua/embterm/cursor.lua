@@ -1,13 +1,34 @@
 M = {}
 
-function M.relative(bufnr, selection)
+function M.relative(bufnr, selection, post_selection_offset)
 	local winid = vim.fn.bufwinid(bufnr)
 	if winid == -1 then
 		return nil
 	end
 	-- Get the window information and convert the winid to a window number
-	local info = vim.fn.getwininfo()[vim.fn.win_id2win(winid)]
-	local scroll = info.topline
+	local view = vim.api.nvim_win_call(winid, vim.fn.winsaveview)
+	local topfill = view.topfill
+	local topline = view.topline - 1
+	local fillend = topline
+	if topline <= selection.start then
+		fillend = selection.start
+	end
+	local realfill = vim.api.nvim_win_text_height(winid, { start_row = topline, end_row = fillend }).fill	
+	local post_offset = 0
+	if topline > selection.last and topfill == 0 then
+		post_offset = post_selection_offset
+	else
+	end
+	local sfill = vim.api.nvim_win_text_height(winid, { start_row = topline, end_row = topline } ).fill
+	local offset = topfill - realfill
+	if topline < selection.start then
+		if sfill ~= 0 then
+			offset = topfill - realfill + post_selection_offset
+		else
+			offset = realfill - topfill
+		end
+	end
+	local scroll = view.topline - offset + post_offset
 	return { start = selection.start - scroll, last = selection.last - scroll }
 end
 
@@ -20,8 +41,8 @@ function M.clamp(bufnr, selection)
 		return nil
 	end
 	local height = vim.api.nvim_win_get_height(winid)
-	local top = math.min(height-1, math.max(0, selection.start))
-	local bottom = math.min(height-1, math.max(0, selection.last))
+	local top = math.min(height, math.max(0, selection.start))
+	local bottom = math.min(height, math.max(0, selection.last))
 	return { start = top, last = bottom }
 end
 
