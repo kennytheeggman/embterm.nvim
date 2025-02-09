@@ -45,6 +45,7 @@ function D.new(parent, config)
 	local O = {}
 	O.pbufn = parent
 	O.cmd = config.cmd
+	O.offset = config.offset
 	-- init selection
 	O.selection = cursor.visual(O.pbufn, config.priv)
 	if O.selection == nil then
@@ -58,8 +59,10 @@ function D.new(parent, config)
 	O.ghost = G.new(O.pbufn, O.selection.last, 5)
 	O.ghost.enable()
 
+	local cmd0
 	local cmd1
 	local cmd2
+
 	-- clean up the object
 	function O.delete()
 		-- close windows
@@ -72,33 +75,37 @@ function D.new(parent, config)
 			vim.api.nvim_buf_delete(O.bufnr, { force = true })
 		end
 		O.ghost.delete()
+		vim.api.nvim_del_autocmd(cmd0)
 		vim.api.nvim_del_autocmd(cmd1)
 		vim.api.nvim_del_autocmd(cmd2)
 	end
 	-- update callback
 	function O.update()
 		-- close windows
-		if O.visible then
-			local wins = vim.fn.win_findbuf(O.bufnr)
-			for _, win in ipairs(wins) do
-				vim.api.nvim_win_close(win, true)
-			end
+		local wins = vim.fn.win_findbuf(O.bufnr)
+		for _, win in ipairs(wins) do
+			vim.api.nvim_win_close(win, true)
 		end
-		-- get selection
-		local screen_selection = cursor.relative(O.pbufn, O.selection)
-		assert(screen_selection ~= nil, "Embterm: Unreachable control flow")
-		-- TODO: Fix getting total number of offset lines from a buffer in global function
-		local last = screen_selection.last
-		screen_selection.last = last + 1
-		local clamped_selection = cursor.clamp(O.pbufn, screen_selection)
-		assert(clamped_selection ~= nil, "Embterm: Unreachable control flow")
-		-- update visibility status
 		local winid = vim.fn.bufwinid(O.pbufn)
 		if winid == -1 then
 			O.visible = false
 			return
 		end
-		if clamped_selection.start == clamped_selection.last then
+		-- get selection
+		local screen_selection = cursor.relative(O.pbufn, O.selection)
+		assert(screen_selection ~= nil, "Embterm: Unreachable control flow")
+
+		local start = screen_selection.start
+		local last = screen_selection.last
+		screen_selection.last = last
+		screen_selection.start = start
+		local other = screen_selection.last
+		local clamped_selection = cursor.clamp(O.pbufn, screen_selection)
+		local clamped_other = cursor.clamp(O.pbufn, { start = other, last = other})
+		assert(clamped_selection ~= nil, "Embterm: Unreachable control flow")
+		assert(clamped_other ~= nil, "Embterm: Unreachable control flow")
+		-- update visibility status
+		if clamped_selection.start == clamped_selection.last and clamped_other.start == clamped_other.last then
 			O.visible = false
 			return
 		end
@@ -108,16 +115,41 @@ function D.new(parent, config)
 		vim.api.nvim_open_win(O.bufnr, false, {
 			relative = 'win',
 			win = winid,
-			width = width,
+			width = math.floor(width / 2),
 			height = clamped_selection.last - clamped_selection.start,
 			col = 0,
 			row = clamped_selection.start,
+			focusable = true,
+			zindex = 45
+		})
+		vim.api.nvim_open_win(O.bufnr, false, {
+			relative = 'win',
+			win = winid,
+			width = math.floor(width / 2),
+			height = clamped_selection.last - clamped_selection.start,
+			col = math.floor(width / 2),
+			row = clamped_selection.start,
+			focusable = true,
+			zindex = 45
+		})
+		vim.api.nvim_open_win(O.bufnr, false, {
+			relative = 'win',
+			win = winid,
+			width = width,
+			height = 1,
+			col = 0,
+			row = clamped_other.start,
 			style = 'minimal',
-			focusable = false,
+			focusable = true,
 			zindex = 45
 		})
 	end
 
+	cmd0 = vim.api.nvim_create_autocmd({ "BufWinLeave" } , {
+		callback = function() vim.schedule(function()
+			O.update()
+		end) end
+	})
 	cmd1 = vim.api.nvim_create_autocmd({ "BufWinEnter", "WinScrolled", "BufWinLeave" }, {
 		buffer = O.pbufn,
 		callback = O.update

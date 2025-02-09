@@ -31,14 +31,17 @@ local function rowtoscreen(winid, row, front)
 	return torow - top
 end
 
-function M.relative(bufnr, selection)
+function M.relative(bufnr, selection, offsets)
 	local winid = vim.fn.bufwinid(bufnr)
 	if winid == -1 then
 		return nil
 	end
+	if offsets == nil then
+		offsets = { start = 0, last = 0 }
+	end
 	local start = rowtoscreen(winid, selection.start, true)
 	local last = rowtoscreen(winid, selection.last, false)
-	return { start = start, last = last }
+	return { start = start + offsets.start, last = last + offsets.last }
 end
 
 function M.clamp(bufnr, selection)
