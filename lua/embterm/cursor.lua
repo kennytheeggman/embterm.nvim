@@ -53,8 +53,8 @@ function M.clamp(bufnr, selection)
 		return nil
 	end
 	local height = vim.api.nvim_win_get_height(winid)
-	local top = math.min(height, math.max(0, selection.start))
-	local bottom = math.min(height, math.max(0, selection.last))
+	local top = math.min(height-1, math.max(0, selection.start))
+	local bottom = math.min(height-1, math.max(0, selection.last))
 	return { start = top, last = bottom }
 end
 
@@ -63,7 +63,7 @@ function M.normal(bufnr)
 	if winid == -1 then
 		return nil
 	end
-	local cursor = vim.api.nvim_win_get_cursor(winid)
+	local cursor = vim.api.nvim_win_get_cursor(winid)[1]
 	return { start = cursor, last = cursor }
 end
 
