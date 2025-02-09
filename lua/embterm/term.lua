@@ -11,7 +11,7 @@ function G.new(bunfr, line, lines)
 
 	function O.enable()
 		local t = {}
-		for i = 1, height do
+	for i = 1, height do
 			t[i] = {{""}}
 		end
 		ext = vim.api.nvim_buf_set_extmark(bunfr, ns, line-1, 0, {
@@ -45,6 +45,7 @@ function D.new(parent, config)
 	local O = {}
 	O.pbufn = parent
 	O.cmd = config.cmd
+	O.differ = config.differ
 	O.offset = config.offset
 	-- init selection
 	O.selection = cursor.visual(O.pbufn, config.priv)
@@ -67,6 +68,7 @@ function D.new(parent, config)
 
 	local cmds = {}
 	local prefocus
+	local term_opened = false
 
 	-- clean up the object
 	function O.delete()
@@ -124,7 +126,7 @@ function D.new(parent, config)
 			height = clamped_selection.last - clamped_selection.start,
 			col = 0,
 			row = clamped_selection.start,
-			focusable = true,
+			focusable = false,
 			zindex = 45
 		})
 		local win2 = vim.api.nvim_open_win(O.bufnrs[2], false, {
@@ -135,10 +137,10 @@ function D.new(parent, config)
 			col = math.floor(width / 2) + 2,
 			row = clamped_selection.start,
 			style = 'minimal',
-			focusable = true,
+			focusable = false,
 			zindex = 45
 		})
-		vim.api.nvim_open_win(O.bufnrs[3], false, {
+		local win3 = vim.api.nvim_open_win(O.bufnrs[3], false, {
 			relative = 'win',
 			win = winid,
 			width = width,
@@ -146,7 +148,7 @@ function D.new(parent, config)
 			col = 0,
 			row = clamped_other.start,
 			style = 'minimal',
-			focusable = true,
+			focusable = false,
 			zindex = 45
 		})
 		vim.api.nvim_win_call(win1, function() vim.cmd("diffthis") end)
@@ -160,6 +162,15 @@ function D.new(parent, config)
 			local view2 = cursor.screentorow(O.bufnrs[2], offset)
 			print(view2.topline, view2.topfill)
 			vim.api.nvim_win_call(win2, function() vim.fn.winrestview(view2) end)
+		end
+		if not term_opened then
+			vim.api.nvim_win_call(win3, function() 
+				vim.fn.termopen(O.cmd)
+				term_opened = true
+			end)
+			vim.api.nvim_win_call(win2, function() vim.cmd("set autoread | call feedkeys(\'lh\')") end)
+			vim.api.nvim_win_call(win2, function() vim.cmd("set updatetime=100") end)
+			vim.api.nvim_win_call(win1, function() vim.cmd(O.differ) end)
 		end
 	end
 
@@ -178,7 +189,7 @@ function D.new(parent, config)
 		vim.api.nvim_set_current_win(winid)
 		local view = vim.fn.winsaveview()
 		view.topline = 1
-		vim.fn.winrestview(view)
+		vim.schedule(function() vim.fn.winrestview(view) end)
 	end
 
 	function O.defocus()
@@ -222,20 +233,23 @@ function D.new(parent, config)
 				return
 			end
 			if pos.start <= O.selection.last and pos.start >= O.selection.start then
+				O.focus()
 				vim.schedule(function() vim.api.nvim_win_call(pwini, function()
 					vim.cmd("norm! zz")
 				end) end)
-				O.focus()
 			end
 		end
 	})
-	cmds[6] = vim.api.nvim_create_autocmd({ "CursorMoved" }, {
+	cmds[6] = vim.api.nvim_create_autocmd({ "CursorMoved", "BufEnter" }, {
 		buffer = O.bufnrs[1],
 		callback = function()
 			local pwini = vim.fn.bufwinid(O.pbufn)
 			if pwini == -1 then
 				return
 			end
+			local view = vim.fn.winsaveview()
+			view.topline = 1
+			vim.schedule(function() vim.fn.winrestview(view) end)
 			vim.schedule(function() vim.api.nvim_win_call(pwini, function()
 				vim.cmd("norm! zz")
 			end) end)
@@ -249,6 +263,12 @@ function D.new(parent, config)
 			O.ghost.set_lines(math.max(0, lines - lines2) + 1)
 			O.update()
 			O.focus()
+		end
+	})
+	cmds[7] = vim.api.nvim_create_autocmd({ "CursorHold" }, {
+		buffer = O.bufnrs[1],
+		callback = function()
+			vim.cmd("checktime")
 		end
 	})
 	local function keymap(key, other, bloc, destination)
@@ -265,9 +285,6 @@ function D.new(parent, config)
 						return nil
 					end
 					vim.api.nvim_win_set_cursor(pwini, destination())
-					vim.api.nvim_win_call(pwini, function()
-						vim.cmd("norm! zz")
-					end)
 				else
 					vim.cmd("norm! " .. other)
 				end
