@@ -188,8 +188,8 @@ function D.new(parent, config)
 		end
 		vim.api.nvim_set_current_win(winid)
 		local view = vim.fn.winsaveview()
-		view.topline = 1
-		vim.api.nvim_win_call(winid, function() vim.fn.winrestview(view) end)
+		-- view.topline = 1
+		-- vim.api.nvim_win_call(winid, function() vim.fn.winrestview(view) end)
 	end
 
 	function O.defocus()
@@ -249,34 +249,48 @@ function D.new(parent, config)
 				return
 			end
 			O.focus()
-			local height = vim.api.nvim_win_get_height(winid)
-			local h2 = vim.api.nvim_win_get_height(pwini)
-			if height >= h2-2 then
-				return
-			end
 			-- local view = vim.api.nvim_win_call(winid, function() vim.fn.winsaveview(winid) end)
-			vim.schedule(function() 
+			pcall(function() vim.schedule(function() 
 				local pview = vim.api.nvim_win_call(pwini, vim.fn.winsaveview) 
-				local pos = cursor.normal(O.bufnrs[1])
-				assert(pos ~= -1, "Embterm: Unreachable Control Flow")
-				local new_pos = { start=O.selection.start, last=O.selection.start}
-				local screen_pos = cursor.relative(O.pbufn, new_pos)
-				assert(screen_pos ~= -1, "Embterm: Unreachable Control Flow")
-				local tl = pview.topline
+				local view = vim.api.nvim_win_call(winid, vim.fn.winsaveview) 
+				local c = vim.api.nvim_buf_line_count(O.bufnrs[1])
 				local h = vim.api.nvim_win_get_height(pwini)
+				local pos = { start = view.lnum, last = view.lnum }
+				if pos.start == c then
+					return
+				end
+				assert(pos ~= nil, "Embterm: Unreachable Control Flow")
+				local new_pos = { start=O.selection.start, last=O.selection.last}
+				local screen_pos = cursor.relative(O.pbufn, new_pos)
+				print(pos.start)
+				local screen_posp = cursor.relative(O.bufnrs[1], pos)
+				assert(screen_pos ~= nil, "Embterm: Unreachable Control Flow")
+				assert(screen_posp ~= nil, "Embterm: Unreachable Control Flow")
+				local tl = view.topline
 				local should = math.floor(h / 2)
-				local is = screen_pos.start + pos.start - 1
+				local is = new_pos.start + screen_posp.start
 				local diff = is - should
 				local attempt = tl + diff
-				print(attempt, is, new_pos.start)
+				local attempt2 = new_pos.start + pos.start - should
+				local npview = { lnum=O.selection.last, topline=math.max(1, attempt2), topfill=0 }
+				if attempt2 > O.selection.last then
+					npview = { lnum=O.selection.last, topline=O.selection.last, topfill=math.min(h, O.ghost.get_lines() + O.selection.last - attempt2 ) }
+				end
+				print(attempt2, O.selection.last, O.ghost.get_lines(), npview.topfill)
 				local nview = { topline=math.max(1, attempt) }
-				vim.api.nvim_win_call(pwini, function() vim.fn.winrestview(nview) end)
+				--if tl == O.selection.last then
+				--	nview = { topfill= math.max(0, tf + diff) }
+				--end
+				vim.api.nvim_win_call(winid, function() vim.fn.winrestview(nview) end)
+				vim.api.nvim_win_call(pwini, function() vim.fn.winrestview(npview) end)
+				if attempt2 > O.selection.last and npview.topfill < h then
+				end
 				O.focus()
 			end)
 			-- vim.schedule(function() vim.api.nvim_win_call(pwini, function()
 			-- 	vim.cmd("norm! zz")
 			-- end) end)
-		end)
+		end) end)
 	})
 	cmds[7] = vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
 		buffer = O.bufnrs[1],

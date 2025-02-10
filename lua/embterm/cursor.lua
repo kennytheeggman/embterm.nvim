@@ -1,10 +1,10 @@
 M = {}
 
-local function rowtoscreen(winid, row, front)
+local function rowtoscreen(winid, row, front, h)
 	-- row 1 to row row
 	local torow = vim.api.nvim_win_text_height(winid, {
 		start_row = 1,
-		end_row = row
+		end_row = row 
 	}).all
 	if front then
 		local inclusive_row = vim.api.nvim_win_text_height(winid, {
@@ -64,8 +64,9 @@ function M.relative(bufnr, selection, offsets)
 	if offsets == nil then
 		offsets = { start = 0, last = 0 }
 	end
-	local start = rowtoscreen(winid, selection.start, true)
-	local last = rowtoscreen(winid, selection.last, false)
+	local h = vim.api.nvim_buf_line_count(bufnr)
+	local start = rowtoscreen(winid, selection.start, true, h)
+	local last = rowtoscreen(winid, selection.last, false, h)
 	return { start = start + offsets.start, last = last + offsets.last }
 end
 
