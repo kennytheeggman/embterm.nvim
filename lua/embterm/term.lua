@@ -157,11 +157,9 @@ function D.new(parent, config)
 		vim.api.nvim_win_call(win2, function() vim.cmd("diffthis") end)
 		if screen_selection.start < 0 then
 			local offset = -screen_selection.start + 1
-			print(offset)
 			-- local view1 = cursor.screentorow(O.bufnrs[1], offset)
 			-- vim.api.nvim_win_call(win1, function() vim.fn.winrestview(view1) end)
 			local view2 = cursor.screentorow(O.bufnrs[2], offset)
-			print(view2.topline, view2.topfill)
 			vim.api.nvim_win_call(win2, function() vim.fn.winrestview(view2) end)
 		end
 		if not term_opened then
@@ -186,10 +184,8 @@ function D.new(parent, config)
 		end
 		prefocus = vim.api.nvim_win_get_cursor(pwini)
 		if winid == -1 then
-			vim.api.nvim_win_set_cursor(pwini, { O.selection.start, 0 })
+			return
 		end
-		winid = vim.fn.bufwinid(O.bufnrs[1])
-		assert(winid ~= -1, "Embterm: Unreachable control flow")
 		vim.api.nvim_set_current_win(winid)
 		local view = vim.fn.winsaveview()
 		view.topline = 1
@@ -238,26 +234,49 @@ function D.new(parent, config)
 			end
 			if pos.start <= O.selection.last and pos.start >= O.selection.start then
 				O.focus()
-				vim.schedule(function() vim.api.nvim_win_call(pwini, function()
-					vim.cmd("norm! zz")
-				end) end)
 			end
 		end
 	})
-	cmds[6] = vim.api.nvim_create_autocmd({ "CursorMoved", "BufEnter" }, {
+	cmds[6] = vim.api.nvim_create_autocmd({ "CursorMoved" }, {
 		buffer = O.bufnrs[1],
-		callback = function()
+		callback = vim.schedule_wrap(function()
 			local pwini = vim.fn.bufwinid(O.pbufn)
 			if pwini == -1 then
 				return
 			end
-			local view = vim.fn.winsaveview()
-			view.topline = 1
-			vim.schedule(function() vim.fn.winrestview(view) end)
-			vim.schedule(function() vim.api.nvim_win_call(pwini, function()
-				vim.cmd("norm! zz")
-			end) end)
-		end
+			local winid = vim.fn.bufwinid(O.bufnrs[1])
+			if winid == -1 then
+				return
+			end
+			O.focus()
+			local height = vim.api.nvim_win_get_height(winid)
+			local h2 = vim.api.nvim_win_get_height(pwini)
+			if height >= h2-2 then
+				return
+			end
+			-- local view = vim.api.nvim_win_call(winid, function() vim.fn.winsaveview(winid) end)
+			vim.schedule(function() 
+				local pview = vim.api.nvim_win_call(pwini, vim.fn.winsaveview) 
+				local pos = cursor.normal(O.bufnrs[1])
+				assert(pos ~= -1, "Embterm: Unreachable Control Flow")
+				local new_pos = { start=O.selection.start, last=O.selection.start}
+				local screen_pos = cursor.relative(O.pbufn, new_pos)
+				assert(screen_pos ~= -1, "Embterm: Unreachable Control Flow")
+				local tl = pview.topline
+				local h = vim.api.nvim_win_get_height(pwini)
+				local should = math.floor(h / 2)
+				local is = screen_pos.start + pos.start - 1
+				local diff = is - should
+				local attempt = tl + diff
+				print(attempt, is, new_pos.start)
+				local nview = { topline=math.max(1, attempt) }
+				vim.api.nvim_win_call(pwini, function() vim.fn.winrestview(nview) end)
+				O.focus()
+			end)
+			-- vim.schedule(function() vim.api.nvim_win_call(pwini, function()
+			-- 	vim.cmd("norm! zz")
+			-- end) end)
+		end)
 	})
 	cmds[7] = vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
 		buffer = O.bufnrs[1],
