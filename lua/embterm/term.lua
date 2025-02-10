@@ -28,6 +28,7 @@ function G.new(bunfr, line, lines)
 		vim.api.nvim_buf_del_extmark(bunfr, ns, ext)
 	end
 	O.delete = O.disable
+	--/// document the following function
 	function O.set_lines(num_lines)
 		height = num_lines
 		O.disable()
@@ -170,7 +171,10 @@ function D.new(parent, config)
 			end)
 			vim.api.nvim_win_call(win2, function() vim.cmd("set autoread | call feedkeys(\'lh\')") end)
 			vim.api.nvim_win_call(win2, function() vim.cmd("set updatetime=100") end)
-			vim.api.nvim_win_call(win1, function() vim.cmd(O.differ) end)
+			local timer = vim.loop.new_timer()
+			timer:start(500, 0, vim.schedule_wrap(function()
+				vim.api.nvim_win_call(win1, function() vim.cmd(O.differ) end)
+			end))
 		end
 	end
 
@@ -189,7 +193,7 @@ function D.new(parent, config)
 		vim.api.nvim_set_current_win(winid)
 		local view = vim.fn.winsaveview()
 		view.topline = 1
-		vim.schedule(function() vim.fn.winrestview(view) end)
+		vim.api.nvim_win_call(winid, function() vim.fn.winrestview(view) end)
 	end
 
 	function O.defocus()
