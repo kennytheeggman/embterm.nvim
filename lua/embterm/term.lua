@@ -187,9 +187,6 @@ function D.new(parent, config)
 			return
 		end
 		vim.api.nvim_set_current_win(winid)
-		local view = vim.fn.winsaveview()
-		-- view.topline = 1
-		-- vim.api.nvim_win_call(winid, function() vim.fn.winrestview(view) end)
 	end
 
 	function O.defocus()
@@ -237,7 +234,7 @@ function D.new(parent, config)
 			end
 		end
 	})
-	cmds[6] = vim.api.nvim_create_autocmd({ "CursorMoved" }, {
+	cmds[6] = vim.api.nvim_create_autocmd({ "CursorMoved", "BufEnter" }, {
 		buffer = O.bufnrs[1],
 		callback = vim.schedule_wrap(function()
 			local pwini = vim.fn.bufwinid(O.pbufn)
@@ -254,10 +251,12 @@ function D.new(parent, config)
 				local pview = vim.api.nvim_win_call(pwini, vim.fn.winsaveview) 
 				local view = vim.api.nvim_win_call(winid, vim.fn.winsaveview) 
 				local c = vim.api.nvim_buf_line_count(O.bufnrs[1])
+				local h2 = vim.api.nvim_win_get_height(winid)
 				local h = vim.api.nvim_win_get_height(pwini)
 				local pos = { start = view.lnum, last = view.lnum }
 				if pos.start == c then
-					return
+					pos.start = view.lnum - 1
+					pos.last = view.lnum - 1
 				end
 				assert(pos ~= nil, "Embterm: Unreachable Control Flow")
 				local new_pos = { start=O.selection.start, last=O.selection.last}
@@ -275,9 +274,23 @@ function D.new(parent, config)
 				local npview = { lnum=O.selection.last, topline=math.max(1, attempt2), topfill=0 }
 				if attempt2 > O.selection.last then
 					npview = { lnum=O.selection.last, topline=O.selection.last, topfill=math.min(h, O.ghost.get_lines() + O.selection.last - attempt2 ) }
+					if npview.topfill < h then
+						npview.lnum = O.selection.last + 1
+						npview.topline = O.selection.last + 1
+						vim.api.nvim_win_call(pwini, function() vim.fn.winrestview(npview) end)
+						local timer = vim.loop.new_timer()
+						timer:start(2, 0, vim.schedule_wrap(function()
+							local win = vim.fn.bufwinid(O.bufnrs[1])
+							if win == -1 then
+								return
+							end
+							vim.api.nvim_win_call(win, function() vim.fn.winrestview({topline=c-h2+1}) end)
+							vim.api.nvim_set_current_win(win)
+						end))
+					end
 				end
-				print(attempt2, O.selection.last, O.ghost.get_lines(), npview.topfill)
 				local nview = { topline=math.max(1, attempt) }
+				print(nview.topline, is, should)
 				--if tl == O.selection.last then
 				--	nview = { topfill= math.max(0, tf + diff) }
 				--end
@@ -285,7 +298,7 @@ function D.new(parent, config)
 				vim.api.nvim_win_call(pwini, function() vim.fn.winrestview(npview) end)
 				if attempt2 > O.selection.last and npview.topfill < h then
 				end
-				O.focus()
+				vim.schedule(O.focus)
 			end)
 			-- vim.schedule(function() vim.api.nvim_win_call(pwini, function()
 			-- 	vim.cmd("norm! zz")
