@@ -4,11 +4,9 @@ This project is a neovim plugin that embeds a terminal into your window
 
 # TODO
 
-- ignore everything outside codeblocks
-- check for "/" commands and raise errors
-- reposition cursor and clear console to clean up regen and chat process
-- make wezterm shortcut
-- create embedded buffer workaround in vim
-- turn this into a vim plugin
-
+- Use real lines instead of ghost lines
+- Add function to copy lines from buffer to middle of other buffer
+- Create mapping from real lines to buffer lines
+- From real topline translate to buffer topline
+- Use bufpos instead of cursor relative line
 
