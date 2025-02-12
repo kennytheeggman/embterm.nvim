@@ -46,39 +46,107 @@ function utils.win_get_view(bufnr)
     return view
 end
 
+
+
+
+
 local text = {}
 
-function text.new(bufnr)
+function text.new(source, destination, start_row, end_row)
 	local O = {}
-	O.bufnr = bufnr
-	O.update()
+	O.bufnr = source
+	O.dest = destination
+	O.overwrite = {}
+	O.overwrite_start = 0
+	O.overwrite_end = 0
+	O.text = {}
+	O.fill = {}
+	O.exts = {}
+	O.length = 0
+	local ns = vim.api.nvim_create_namespace("embterm")
 
-	function O.update()
+	local function _update(bufnr, get_length)
 		O.text = {}
-		O.length = vim.api.nvim_buf_line_count(O.bufnr)
+		O.fill = {}
+		if get_length then
+			O.length = vim.api.nvim_buf_line_count(bufnr)
+		end
+		if O.length == nil then return nil end
 
-		local winid = utils.win_from_buf(O.bufnr)
+		local winid = utils.win_from_buf(bufnr)
 		if winid == nil then return nil end
 
-		for i = 0, O.length do
-			local line = vim.api.nvim_buf_get_lines(bufnr, i, i+1, false)
-			assert(line[1] ~= nil, "Embterm: Unreachable control flow")
+		if get_length then
+			O.text = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+		else
+			O.text = vim.api.nvim_buf_get_lines(bufnr, O.overwrite_start, O.overwrite_end, false)
+		end
+
+		for i = 0, O.length-1 do
 			local fill = vim.api.nvim_win_text_height(winid, {
 				start_row = i,
 				end_row = i,
 			}).fill
-			local obj = {}
-			obj.text = line[1]
-			obj.fill = fill
-			O.text[i] = obj
+			O.fill[i+1] = fill
+		end
+
+	end
+
+	function O.update_from_source()
+		_update(O.bufnr, true)
+	end
+	function O.update_from_dest()
+		_update(O.dest, false)
+	end
+
+	function O.copy(get_length)
+		O.overwrite = vim.api.nvim_buf_get_lines(O.dest, start_row, end_row, false)
+		vim.api.nvim_buf_set_lines(O.dest, start_row, end_row, false, O.text)
+		O.overwrite_start = start_row
+		O.overwrite_end = start_row + O.length
+		for i = 0, O.length-1 do
+			local vt = {}
+			for j = 1, O.fill[i+1] do
+				vt[j] = {{""}}
+			end
+			O.exts[i+1] = vim.api.nvim_buf_set_extmark(O.dest, ns, start_row + i, 0, {
+				virt_lines = vt
+			})
 		end
 	end
+
+	function O.restore()
+		vim.api.nvim_buf_set_lines(O.dest, O.overwrite_start, O.overwrite_end, false, O.overwrite)
+		for _, ext in ipairs(O.exts) do
+			vim.api.nvim_buf_del_extmark(O.dest, ns, ext)
+		end
+	end
+
+	O.update_from_source()
+
+	vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
+		buffer = O.bufnr,
+		callback = function()
+			O.update_from_source()
+			O.restore()
+			O.copy()
+		end
+	})
+	vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
+		buffer = O.dest,
+		callback = function()
+			O.update_from_dest()
+			O.restore()
+			O.copy()
+		end
+	})
 
 	return O
 end
 
 
 local M = {}
+M.text = text
 
 function M.new(parent, config)
 	local O = {}
