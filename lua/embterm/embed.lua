@@ -91,7 +91,6 @@ function text.new(source, destination, start_row, end_row)
 		O.fill = {}
 		local start = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns, start_ext, {})[1]
 		local last = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns, end_ext, {})[1]
-		print(start, last)
 		-- get length
 		O.length = last - start + 1
 		-- get text
@@ -149,9 +148,9 @@ function text.new(source, destination, start_row, end_row)
 	end
 
 	function O.restore()
-		local start = vim.api.nvim_buf_get_extmark_by_id(O.dest, ns, O.dest_start_ext, {})[1]
+		local start = start_row
 		local last = vim.api.nvim_buf_get_extmark_by_id(O.dest, ns, O.dest_end_ext, {})[1]
-		vim.api.nvim_buf_set_lines(O.dest, start, last, false, overwrite)
+		vim.api.nvim_buf_set_lines(O.dest, start-1, last, false, overwrite)
 		for _, ext in ipairs(exts) do
 			vim.api.nvim_buf_del_extmark(O.dest, ns, ext)
 		end
@@ -187,13 +186,17 @@ function text.new(source, destination, start_row, end_row)
 				O.update_from_dest()
 				O.copy_to_source()
 			else
+				O.restore()
 				vim.schedule(O.delete)
 			end
 		end
 	})
 	autocmds[3] = vim.api.nvim_create_autocmd({ "BufDelete" }, {
 		buffer = O.src,
-		callback = vim.schedule_wrap(O.delete)
+		callback = function()
+			O.restore()
+			vim.schedule(O.delete)
+		end
 	})
 
 	return O
