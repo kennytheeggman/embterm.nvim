@@ -22,11 +22,6 @@ function sync.new(source, destination, start_row, end_row)
 	O.dest_start_ext = vim.api.nvim_buf_set_extmark(O.dest, ns, start_row, 0, {})
 	O.dest_end_ext = vim.api.nvim_buf_set_extmark(O.dest, ns, end_row, 0, {})
 
-	local function print_ds(text)
-		local dest_start = vim.api.nvim_buf_get_extmark_by_id(O.dest, ns, O.dest_start_ext, {})[1]
-		print(text .. dest_start)
-	end
-
 	local function _update_exts()
 		O.length = vim.api.nvim_buf_line_count(source)
 		local src_last = vim.api.nvim_buf_get_extmark_by_id(O.src, ns, O.src_end_ext, {})[1]
