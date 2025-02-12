@@ -39,16 +39,27 @@ function M.new(parent, config)
 		local dims = utils.win_get_size(O.pbufnr)
 		assert(dims ~= nil, "Embterm: Unreachable control flow")
 
-		-- buffer height calculation
+		-- buffer height and scroll calculation
 		local height = O.selection.last - O.selection.start + 1
-		local ptopline = utils.win_get_view(O.pbufnr).topline
-		assert(ptopline ~= nil, "Embterm: Unreachable control flow")
+		local pview = utils.win_get_view(O.pbufnr)
+		assert(pview ~= nil, "Embterm: Unreachable control flow")
+		local ptopline = pview.topline
+		local topline = ptopline - O.selection.start + 1
 		if ptopline > O.selection.start then
 			height = math.max(O.selection.last - ptopline + 1, 0)
 		end
 		if ptopline + dims.height - 1 < O.selection.last then
 			height = math.max(ptopline + dims.height - O.selection.start, 0)
 		end
+		local lines = vim.api.nvim_buf_line_count(O.bufnr)
+		print(topline, ptopline, O.selection.start, height)
+		if topline > lines then
+			topline = lines
+		end
+		if topline < 1 then
+			topline = 1
+		end
+		pview.topline = topline
 
 		-- create window if necessary
 		if height == 0 then return end
@@ -63,6 +74,7 @@ function M.new(parent, config)
 			style = 'minimal',
 			zindex = 45
 		})
+		utils.win_set_view(O.bufnr, pview)
 	end
 
 	-- autocmds
