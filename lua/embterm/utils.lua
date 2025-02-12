@@ -46,4 +46,10 @@ function utils.win_get_view(bufnr)
     return view
 end
 
+function utils.win_set_view(bufnr, view)
+	local winid = utils.win_from_buf(bufnr)
+	if winid == nil then return nil end
+	vim.api.nvim_win_call(winid, function() vim.fn.winrestview(view) end)
+end
+
 return utils
