@@ -50,74 +50,92 @@ end
 
 
 
+
 local text = {}
 
 function text.new(source, destination, start_row, end_row)
 	local O = {}
-	O.bufnr = source
+	-- source buffer info
+	O.src = source
+	-- destination buffer info
 	O.dest = destination
-	O.overwrite = {}
-	O.overwrite_start = 0
-	O.overwrite_end = 0
+	-- syncing text data
 	O.text = {}
 	O.fill = {}
-	O.exts = {}
-	O.length = 0
+	O.length = vim.api.nvim_buf_line_count(source)
+	-- restore info
+	local exts = {}
+	local overwrite = vim.api.nvim_buf_get_lines(destination, start_row, end_row, false)
 	local ns = vim.api.nvim_create_namespace("embterm")
+	-- extmarks
+	O.src_start_ext = vim.api.nvim_buf_set_extmark(O.src, ns, 0, 0, {})
+	O.src_end_ext = vim.api.nvim_buf_set_extmark(O.src, ns, O.length-1, 0, {})
+	O.dest_start_ext = vim.api.nvim_buf_set_extmark(O.dest, ns, start_row, 0, {})
+	O.dest_end_ext = vim.api.nvim_buf_set_extmark(O.dest, ns, end_row, 0, {})
 
-	local function _update(bufnr, get_length)
+	local function _update(bufnr, start_ext, end_ext, update_fills, offset)
 		O.text = {}
 		O.fill = {}
-		if get_length then
-			O.length = vim.api.nvim_buf_line_count(bufnr)
-		end
-		if O.length == nil then return nil end
-
+		local start = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns, start_ext, {})[1]
+		local last = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns, end_ext, {})[1]
+		print(start, last)
+		-- get length
+		O.length = last - start + 1
+		-- get text
+		O.text = vim.api.nvim_buf_get_lines(bufnr, start, last + offset, false)
+		-- get fills
+		if not update_fills then return end
 		local winid = utils.win_from_buf(bufnr)
 		if winid == nil then return nil end
-
-		if get_length then
-			O.text = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-		else
-			O.text = vim.api.nvim_buf_get_lines(bufnr, O.overwrite_start, O.overwrite_end, false)
-		end
-
 		for i = 0, O.length-1 do
 			local fill = vim.api.nvim_win_text_height(winid, {
-				start_row = i,
-				end_row = i,
+				start_row = i + start,
+				end_row = i + start,
 			}).fill
 			O.fill[i+1] = fill
 		end
-
 	end
-
-	function O.update_from_source()
-		_update(O.bufnr, true)
-	end
-	function O.update_from_dest()
-		_update(O.dest, false)
-	end
-
-	function O.copy(get_length)
-		O.overwrite = vim.api.nvim_buf_get_lines(O.dest, start_row, end_row, false)
-		vim.api.nvim_buf_set_lines(O.dest, start_row, end_row, false, O.text)
-		O.overwrite_start = start_row
-		O.overwrite_end = start_row + O.length
+	local function _copy(bufnr, start_ext, end_ext, update_fills, offset)
+		local start = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns, start_ext, {})[1]
+		local last = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns, end_ext, {})[1]
+		vim.api.nvim_buf_set_lines(bufnr, start, last + offset, false, O.text)
+		if not update_fills then return end
 		for i = 0, O.length-1 do
 			local vt = {}
 			for j = 1, O.fill[i+1] do
 				vt[j] = {{""}}
 			end
-			O.exts[i+1] = vim.api.nvim_buf_set_extmark(O.dest, ns, start_row + i, 0, {
+			exts[i+1] = vim.api.nvim_buf_set_extmark(bufnr, ns, start + i, 0, {
 				virt_lines = vt
 			})
 		end
 	end
 
+	function O.update_from_source()
+		O.src_start_ext = vim.api.nvim_buf_set_extmark(O.src, ns, 0, 0, {})
+		O.dest_start_ext = vim.api.nvim_buf_set_extmark(O.dest, ns, start_row, 0, {})
+		_update(O.src, O.src_start_ext, O.src_end_ext, true, 1)
+		--print(O.text[1])
+	end
+	function O.update_from_dest()
+		O.src_start_ext = vim.api.nvim_buf_set_extmark(O.src, ns, 0, 0, {})
+		O.dest_start_ext = vim.api.nvim_buf_set_extmark(O.dest, ns, start_row, 0, {})
+		_update(O.dest, O.dest_start_ext, O.dest_end_ext, false, 0)
+		--print(O.text[1])
+	end
+
+	function O.copy_to_dest()
+		_copy(O.dest, O.dest_start_ext, O.dest_end_ext, true, 0)
+	end
+	function O.copy_to_source()
+		_copy(O.src, O.src_start_ext, O.src_end_ext, false, 1)
+	end
+
 	function O.restore()
-		vim.api.nvim_buf_set_lines(O.dest, O.overwrite_start, O.overwrite_end, false, O.overwrite)
-		for _, ext in ipairs(O.exts) do
+		local start = vim.api.nvim_buf_get_extmark_by_id(O.dest, ns, O.dest_start_ext, {})[1]
+		local last = vim.api.nvim_buf_get_extmark_by_id(O.dest, ns, O.dest_end_ext, {})[1]
+		vim.api.nvim_buf_set_lines(O.dest, start, last, false, overwrite)
+		for _, ext in ipairs(exts) do
 			vim.api.nvim_buf_del_extmark(O.dest, ns, ext)
 		end
 	end
@@ -125,19 +143,18 @@ function text.new(source, destination, start_row, end_row)
 	O.update_from_source()
 
 	vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
-		buffer = O.bufnr,
+		buffer = O.src,
 		callback = function()
 			O.update_from_source()
 			O.restore()
-			O.copy()
+			O.copy_to_dest()
 		end
 	})
 	vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
 		buffer = O.dest,
 		callback = function()
 			O.update_from_dest()
-			O.restore()
-			O.copy()
+			O.copy_to_source()
 		end
 	})
 
