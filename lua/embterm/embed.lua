@@ -50,7 +50,6 @@ end
 
 
 
-
 local text = {}
 
 function text.new(source, destination, start_row, end_row)
@@ -73,6 +72,17 @@ function text.new(source, destination, start_row, end_row)
 	O.dest_start_ext = vim.api.nvim_buf_set_extmark(O.dest, ns, start_row, 0, {})
 	O.dest_end_ext = vim.api.nvim_buf_set_extmark(O.dest, ns, end_row, 0, {})
 
+	local function _update_exts()
+		O.length = vim.api.nvim_buf_line_count(source)
+		local src_last = vim.api.nvim_buf_get_extmark_by_id(O.src, ns, O.src_end_ext, {})[1]
+		if src_last ~= O.length-1 then
+			O.src_end_ext = vim.api.nvim_buf_set_extmark(O.src, ns, O.length-1, 0, {})
+		end
+		local dest_last = vim.api.nvim_buf_get_extmark_by_id(O.dest, ns, O.dest_end_ext, {})[1]
+		if dest_last < start_row then
+			O.dest_end_ext = vim.api.nvim_buf_set_extmark(O.dest, ns, start_row, 0, {})
+		end
+	end
 	local function _update(bufnr, start_ext, end_ext, update_fills, offset)
 		O.text = {}
 		O.fill = {}
@@ -98,7 +108,7 @@ function text.new(source, destination, start_row, end_row)
 	local function _copy(bufnr, start_ext, end_ext, update_fills, offset)
 		local start = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns, start_ext, {})[1]
 		local last = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns, end_ext, {})[1]
-		vim.api.nvim_buf_set_lines(bufnr, start, last + offset, false, O.text)
+		vim.api.nvim_buf_set_lines(bufnr, start - 1 + offset, last + offset, false, O.text)
 		if not update_fills then return end
 		for i = 0, O.length-1 do
 			local vt = {}
@@ -114,6 +124,7 @@ function text.new(source, destination, start_row, end_row)
 	function O.update_from_source()
 		O.src_start_ext = vim.api.nvim_buf_set_extmark(O.src, ns, 0, 0, {})
 		O.dest_start_ext = vim.api.nvim_buf_set_extmark(O.dest, ns, start_row, 0, {})
+		_update_exts()
 		_update(O.src, O.src_start_ext, O.src_end_ext, true, 1)
 		--print(O.text[1])
 	end
@@ -121,6 +132,7 @@ function text.new(source, destination, start_row, end_row)
 		O.src_start_ext = vim.api.nvim_buf_set_extmark(O.src, ns, 0, 0, {})
 		O.dest_start_ext = vim.api.nvim_buf_set_extmark(O.dest, ns, start_row, 0, {})
 		_update(O.dest, O.dest_start_ext, O.dest_end_ext, false, 0)
+		_update_exts()
 		--print(O.text[1])
 	end
 
