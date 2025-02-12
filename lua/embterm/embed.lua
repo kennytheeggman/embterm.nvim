@@ -1,7 +1,7 @@
 local utils = {}
 
 -- Remove all buffers from a given window number.
--- @param bufnr number The window number to remove buffers from.
+-- @part:q!am bufnr number The window number to remove buffers from.
 -- @return none
 function utils.win_remove(bufnr)
 	-- Find the buffer numbers in the specified window.
@@ -46,10 +46,6 @@ function utils.win_get_view(bufnr)
     return view
 end
 
-
-
-
-
 local text = {}
 
 function text.new(source, destination, start_row, end_row)
@@ -64,7 +60,7 @@ function text.new(source, destination, start_row, end_row)
 	O.length = vim.api.nvim_buf_line_count(source)
 	-- restore info
 	local exts = {}
-	local overwrite = vim.api.nvim_buf_get_lines(destination, start_row, end_row, false)
+	local overwrite = vim.api.nvim_buf_get_lines(destination, start_row-1, end_row, false)
 	local ns = vim.api.nvim_create_namespace("embterm")
 	local autocmds = {}
 	-- extmarks
@@ -116,7 +112,6 @@ function text.new(source, destination, start_row, end_row)
 		local start = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns, start_ext, {})[1]
 		local last = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns, end_ext, {})[1]
 		vim.api.nvim_buf_set_lines(bufnr, start - 1 + offset, last + offset, false, O.text)
-		print(start-1+offset, last+offset)
 		if not update_fills then return end
 		for i = 0, O.length-1 do
 			local vt = {}
@@ -163,6 +158,12 @@ function text.new(source, destination, start_row, end_row)
 	end
 
 	function O.delete()
+		local start = start_row
+		local last = vim.api.nvim_buf_get_extmark_by_id(O.dest, ns, O.dest_end_ext, {})[1]
+		vim.schedule(function() vim.api.nvim_buf_set_lines(O.dest, start-1, last, false, overwrite) end)
+		for _, ext in ipairs(exts) do
+			vim.api.nvim_buf_del_extmark(O.dest, ns, ext)
+		end
 		if vim.api.nvim_buf_is_valid(O.src) then
 			vim.api.nvim_buf_del_extmark(O.src, ns, O.src_start_ext)
 			vim.api.nvim_buf_del_extmark(O.src, ns, O.src_end_ext)
@@ -181,13 +182,9 @@ function text.new(source, destination, start_row, end_row)
 	autocmds[1] = vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
 		buffer = O.src,
 		callback = function()
-			print_ds("before restore ")
 			O.restore()
-			print_ds("before update ")
 			O.update_from_source()
-			print_ds("before copy ")
 			O.copy_to_dest()
-			print_ds("after")
 		end
 	})
 	autocmds[2] = vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
@@ -197,7 +194,6 @@ function text.new(source, destination, start_row, end_row)
 				O.update_from_dest()
 				O.copy_to_source()
 			else
-				O.restore()
 				vim.schedule(O.delete)
 			end
 		end
