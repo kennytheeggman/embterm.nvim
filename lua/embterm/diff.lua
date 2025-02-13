@@ -8,7 +8,7 @@ local function get_update_height(O, min_height)
 		height1 = vim.api.nvim_win_text_height(winid1, {
 			start_row = 0,
 			end_row = -1
-		})
+		}).all
 	end
 	local height2 = vim.api.nvim_buf_line_count(O.bufnr2)
 	local winid2 = utils.win_from_buf(O.bufnr1)
@@ -16,7 +16,7 @@ local function get_update_height(O, min_height)
 		height1 = vim.api.nvim_win_text_height(winid2, {
 			start_row = 0,
 			end_row = -1
-		})
+		}).all
 	end
 
 	-- begin height calculation
@@ -25,12 +25,12 @@ local function get_update_height(O, min_height)
 	local start_row = O.selection.start
 
 	-- parent view info
+	local pwinid = utils.win_from_buf(O.pbufnr)
+	if pwinid == nil then return 0 end
 	local _pview = utils.win_get_view(O.pbufnr)
 	assert(_pview ~= nil, "Embterm: Unreachable control flow")
 	local _pdims = utils.win_get_size(O.pbufnr)
 	assert(_pdims ~= nil, "Embterm: Unreachable control flow")
-	local pwinid = utils.win_from_buf(O.pbufnr)
-	assert(pwinid ~= nil, "Embterm: Unreachable control flow")
 
 	local pheight = _pdims.height
 	local ptopline = _pview.topline
@@ -104,7 +104,7 @@ local diff = {}
 function diff.new(parent, config)
 	local O = {}
 	O.pbufnr = parent
-	O.cmd = config.cmd
+	O.cmd = config.cmd -- lua function, takes win1 and win2 as args
 	O.selection = config.range
 	-- asserts
 	assert(O.pbufnr ~= nil, "Embterm: parent should not be nil")
@@ -133,51 +133,74 @@ function diff.new(parent, config)
 	end
 
 	function O.update()
-		-- delete windows
-		utils.win_remove(O.bufnr1)
-		utils.win_remove(O.bufnr2)
+		-- buffer height and scroll calculation
+		local height = get_update_height(O, O.selection.last - O.selection.start + 1)
+
+		if height == 0 then
+			-- delete windows
+			utils.win_remove(O.bufnr1)
+			utils.win_remove(O.bufnr2)
+			return
+		end
 
 		local pwinid = utils.win_from_buf(O.pbufnr)
 		if pwinid == nil then return end
+		local winid1 = utils.win_from_buf(O.bufnr1)
+		local winid2 = utils.win_from_buf(O.bufnr2)
 		local dims = utils.win_get_size(O.pbufnr)
 		assert(dims ~= nil, "Embterm: Unreachable control flow")
 
-		-- buffer height and scroll calculation
-		local height = get_update_height(O, O.selection.last - O.selection.start + 1)
-		if height == 0 then return end
-
 		-- create window if necessary
-		local win1 = vim.api.nvim_open_win(O.bufnr1, false, {
-			relative = 'win',
-			win = pwinid,
-			width = math.floor(dims.width/2) + 2,
-			height = height,
-			col = -3,
-			row = 0,
-			bufpos = { O.selection.start - 1, -2 },
-			style = 'minimal',
-			zindex = 45
-		})
-		local win2 = vim.api.nvim_open_win(O.bufnr2, false, {
-			relative = 'win',
-			win = pwinid,
-			width = dims.width - math.floor(dims.width/2) + 1,
-			height = height,
-			col = math.floor(dims.width/2) + 2,
-			row = 0,
-			bufpos = { O.selection.start - 1, math.floor(dims.width/2) + 2 },
-			style = 'minimal',
-			zindex = 45
-		})
+		if winid1 == nil or winid2 == nil then
+			local win1 = vim.api.nvim_open_win(O.bufnr1, false, {
+				relative = 'win',
+				win = pwinid,
+				width = math.floor(dims.width/2) + 2,
+				height = height,
+				col = -3,
+				row = 0,
+				bufpos = { O.selection.start - 1, -2 },
+				style = 'minimal',
+				zindex = 45
+			})
+			local win2 = vim.api.nvim_open_win(O.bufnr2, false, {
+				relative = 'win',
+				win = pwinid,
+				width = dims.width - math.floor(dims.width/2) + 1,
+				height = height,
+				col = math.floor(dims.width/2) + 2,
+				row = 0,
+				bufpos = { O.selection.start - 1, math.floor(dims.width/2) + 2 },
+				style = 'minimal',
+				zindex = 45
+			})
+			O.cmd(win1, win2)
+			local view1 = get_update_view(O, O.bufnr1)
+			local view2 = get_update_view(O, O.bufnr2)
+			assert(view1 ~= nil, "Embterm: Unreachable control flow")
+			assert(view2 ~= nil, "Embterm: Unreachable control flow")
+			utils.win_set_view(O.bufnr1, view1)
+			utils.win_set_view(O.bufnr2, view2)
+		else
+			-- save cursor positions
+			local cursor1 = vim.api.nvim_win_get_cursor(winid1)
+			local cursor2 = vim.api.nvim_win_get_cursor(winid2)
+			-- set modified height
+			vim.api.nvim_win_set_height(winid1, height)
+			vim.api.nvim_win_set_height(winid2, height)
+			-- update views
+			local view1 = get_update_view(O, O.bufnr1)
+			local view2 = get_update_view(O, O.bufnr2)
+			assert(view1 ~= nil, "Embterm: Unreachable control flow")
+			assert(view2 ~= nil, "Embterm: Unreachable control flow")
+			utils.win_set_view(O.bufnr1, view1)
+			utils.win_set_view(O.bufnr2, view2)
+			-- reset cursors
+			vim.api.nvim_win_set_cursor(winid1, cursor1)
+			vim.api.nvim_win_set_cursor(winid2, cursor2)
+		end
 
-		O.cmd(win1, win2)
 
-		local view1 = get_update_view(O, O.bufnr1)
-		local view2 = get_update_view(O, O.bufnr2)
-		assert(view1 ~= nil, "Embterm: Unreachable control flow")
-		assert(view2 ~= nil, "Embterm: Unreachable control flow")
-		utils.win_set_view(O.bufnr1, view1)
-		utils.win_set_view(O.bufnr2, view2)
 	end
 
 	-- autocmds
@@ -189,9 +212,20 @@ function diff.new(parent, config)
 		buffer = O.bufnr2,
 		callback = O.delete,
 	})
-	O.autocmds[2] = vim.api.nvim_create_autocmd({ "BufWinEnter", "WinScrolled", "BufWinLeave" }, {
-		buffer = O.pbufnr,
-		callback = O.update,
+	O.autocmds[3] = vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
+		buffer = O.bufnr1,
+		callback = O.update
+	})
+	O.autocmds[4] = vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
+		buffer = O.bufnr2,
+		callback = O.update
+	})
+	O.autocmds[2] = vim.api.nvim_create_autocmd({ "BufWinEnter", "WinScrolled" }, {
+		callback = function()
+			if vim.fn.bufnr() == O.bufnr1 then return end
+			if vim.fn.bufnr() == O.bufnr2 then return end
+			O.update()
+		end,
 	})
 	return O
 end
