@@ -32,8 +32,9 @@ function utils.win_get_size(bufnr)
 	-- Get the width and height of the window
 	local width = vim.api.nvim_win_get_width(winid)
 	local height = vim.api.nvim_win_get_height(winid)
+	local number = vim.api.nvim_get_option_value("numberwidth", { win = winid })
 	-- Return the size as a table
-	return { width = width, height = height }
+	return { width = width - number - 2, height = height }
 end
 
 -- Returns the saved view of a window for the given buffer number.
