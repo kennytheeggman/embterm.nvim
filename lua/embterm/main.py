@@ -214,12 +214,18 @@ def chat_stream_callback(json):
     # print(response, end="")
 
     # Update the last chat message with the new response
+    # Ensure the response is appended to the global answer variable
     global answer
     answer += response
+
+    # Define global variables for file path and content boundaries
     global file_path
     global parent_content_start
     global parent_content_end
+
+    # Attempt to open the file in write mode
     with open(file_path, "w") as file:
+        # Write the updated content to the file
         file.write(parent_content_start + "\n" + answer + "\n" + parent_content_end)
 
     # Flush the stdout buffer to ensure immediate display of the output
@@ -289,3 +295,4 @@ if __name__ == "__main__":
         # parent_content_end = ""
     clip = pyperclip.paste()
     generate()
+

@@ -1,4 +1,4 @@
-local win = require('lua.embterm.window')
+local win = require('embterm.window')
 local obj
 
 
