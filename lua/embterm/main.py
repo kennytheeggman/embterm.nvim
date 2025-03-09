@@ -285,5 +285,7 @@ if __name__ == "__main__":
             for i in range(lines[1] + 1, len(parent_content)):
                 parent_content_end += parent_content[i] + "\n"
         # print(parent_content_start, parent_content_end)
+        parent_content_start = ""
+        parent_content_end = ""
     clip = pyperclip.paste()
     generate()

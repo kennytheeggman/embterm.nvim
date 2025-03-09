@@ -2,6 +2,9 @@ local win = require('lua.embterm.window')
 local obj
 
 
+--/// write a lua function that says hello world
+
+
 vim.api.nvim_create_user_command('EmbTermOpen', function()
 	local path = debug.getinfo(1).source:sub(2, -9)
 	obj = win.new({
