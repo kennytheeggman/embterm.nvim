@@ -1,9 +1,13 @@
 local M = {}
 
 
-function M.new()
+function M.new(config)
+	local cmd1 = config.cmd1
+	local cmd2 = config.cmd2
+	local init = config.init
 	local O = {}
 	local id = vim.api.nvim_create_augroup("embterm", {})
+	init(O)
 	local cmds = {}
 
 	-- parent and child buffers
@@ -13,6 +17,7 @@ function M.new()
 
 	-- resume split window
 	function O.resume()
+		-- TODO: check here if buffers are valid
 		vim.cmd("diffthis")
 		if O.winid1 == nil then
 			vim.cmd("botright vnew")
@@ -24,10 +29,8 @@ function M.new()
 			O.winid2 = vim.api.nvim_get_current_win()
 			vim.api.nvim_win_set_buf(O.winid2, O.bufnr2)
 		end
-		vim.api.nvim_win_call(O.winid2, function() vim.cmd("diffthis") end)
-		vim.api.nvim_win_call(O.winid1, function() vim.fn.termopen("zsh") end)
-		vim.api.nvim_win_call(O.winid1, function() vim.cmd("resize 10") end)
-		vim.api.nvim_win_call(O.winid1, function() vim.cmd("set nonumber") end)
+		vim.api.nvim_win_call(O.winid2, function() cmd2(O) end)
+		vim.api.nvim_win_call(O.winid1, function() cmd1(O) end)
 	end
 
 	-- update winid to ensure validity
@@ -38,6 +41,17 @@ function M.new()
 		if O.winid2 and not vim.api.nvim_win_is_valid(O.winid2) then
 			O.winid2 = nil
 		end
+		local winid = vim.fn.bufwinid(O.pbufnr)
+		if winid == -1 then
+			if O.winid1 then
+				vim.api.nvim_win_close(O.winid1, false)
+			end
+			if O.winid2 then
+				vim.api.nvim_win_close(O.winid2, false)
+			end
+		else if not O.winid1 or not O.winid2 then
+			O.resume()
+		end end
 	end
 
 	-- delete windows
@@ -48,27 +62,33 @@ function M.new()
 		if O.winid2 then
 			vim.api.nvim_win_close(O.winid2, false)
 		end
-		vim.api.nvim_buf_delete(O.bufnr1, {force=true})
-		vim.api.nvim_buf_delete(O.bufnr2, {force=true})
-		for i = 1,3 do
+		O.winid1 = nil
+		O.winid2 = nil
+		for i = 1,1 do
 			vim.api.nvim_del_autocmd(cmds[i])
 		end
+		vim.api.nvim_buf_delete(O.bufnr1, {force=true})
+		vim.api.nvim_buf_delete(O.bufnr2, {force=true})
 	end
 
 	-- initialization code
 	O.resume()
-	cmds[1] = vim.api.nvim_create_autocmd({"BufEnter", "BufWinEnter"}, {
+	cmds[1] = vim.api.nvim_create_autocmd({"BufWinEnter"}, {
 		group = id,
 		callback = O.update
 	})
 	cmds[2] = vim.api.nvim_create_autocmd({"WinClosed", "TermClose"}, {
 		group = id,
-		callback = O.delete,
+		callback = function()
+			O.delete()
+		end,
 		buffer = O.bufnr1
 	})
 	cmds[3] = vim.api.nvim_create_autocmd({"WinClosed", "TermClose"}, {
 		group = id,
-		callback = O.delete,
+		callback = function()
+			O.delete()
+		end,
 		buffer = O.bufnr2
 	})
 	return O
